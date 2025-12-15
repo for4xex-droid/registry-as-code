@@ -1,0 +1,31 @@
+Metadata-Version: 2.4
+Name: ai-native-project
+Version: 0.1.0
+Summary: AI-Native Python Project Template
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: pydantic-settings>=2.2.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Requires-Dist: mypy>=1.10.0; extra == "dev"
+
+# AI-Native Project
+
+## Overview
+(Brief description of the project goal.)
+
+## Architecture
+- **Core:** Pure business logic. `Result` pattern only. No Exceptions.
+- **Infrastructure:** External adapters (DB, API, IO).
+- **Interface:** Entry points (CLI, API).
+
+## Commands
+- Setup: `make setup`
+- Run: `make run`
+- Test: `make test`
+
+## Rules for AI
+- Read `.agent/rules.md` carefully.
+- No `print()`, No `raise`, No Global `random`.
