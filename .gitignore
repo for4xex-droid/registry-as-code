@@ -17,3 +17,7 @@ htmlcov/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
+# Registry as Code Specific
+*.pdf
+company_data.json
