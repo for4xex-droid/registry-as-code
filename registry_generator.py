@@ -14,6 +14,7 @@ from reportlab.pdfgen import canvas
 
 @dataclass
 class CompanyConfig:
+    mode: str = "change_rep"  # "change_rep" (交代) or "withdrawal" (退社・持分譲渡)
     name: str = "合同会社サンプル"  # 会社名
     address: str = "京都市北区..."  # 本店所在地
     capital: str = "1,000,000"  # 資本金（円）
@@ -40,7 +41,8 @@ class CompanyConfig:
     def from_json(cls, json_path: str) -> "CompanyConfig":
         if not os.path.exists(json_path):
             print(
-                f"⚠️ 設定ファイル {json_path} が見つかりません。デフォルト値を使用します。"
+                f"⚠️ 設定ファイル {json_path} が見つかりません。\n"
+                "デフォルト値を使用します。"
             )
             return cls()
         with open(json_path, "r", encoding="utf-8") as f:
@@ -87,11 +89,68 @@ class RegistryGenerator:
             )
 
     def generate_all(self) -> None:
+        # 1. 登記申請書（中身はモードによって変わる）
         self.generate_application()
-        self.generate_consent()
+
+        # 2. 就任承諾書（共通）
         self.generate_acceptance()
-        self.generate_resignation()
+
+        # 3. モードによる分岐
+        if self.c.mode == "change_rep":
+            # パターンA: 辞任のみ
+            self.generate_consent_change()  # 同意書（選任のみ）
+            self.generate_resignation()  # 辞任届
+            print("👉 モード: 代表社員の交代（辞任届あり）")
+
+        elif self.c.mode == "withdrawal":
+            # パターンB: 退社（持分譲渡）
+            self.generate_consent_withdrawal()  # 同意書（譲渡・退社入り）
+            # 辞任届は作らない
+            print("👉 モード: 持分譲渡による退社（辞任届なし）")
+
         print("✅ 全ての書類生成が完了しました。")
+
+    # --- 書類2: 総社員の同意書 (退社・持分譲渡版) ---
+    def generate_consent_withdrawal(self) -> None:
+        filename = "2_総社員の同意書.pdf"
+        c = self._create_canvas(filename)
+
+        self._draw_title(c, "総社員の同意書", 250 * mm)
+
+        # Wordファイルの内容を移植
+        text_lines = [
+            f"１．当会社の社員 {self.c.old_rep_name} は、その持分全部を "
+            f"{self.c.new_rep_name} に",
+            f"　　譲渡して退社し、これを譲り受けた {self.c.new_rep_name} は、",
+            "　　別紙記載のとおり承諾した。",
+            "",
+            "１．定款第５条中、有限責任社員竹中由美子の項を削除し",
+            "　　次の一号を加えること。",
+            f"　　５　（新住所） 有限責任社員 {self.c.new_rep_name} 金１万円",
+            "",
+            "１．定款第７条を次のように改める。",
+            f"　　７　当会社の業務は、社員 {self.c.new_rep_name} が執行する。",
+            "",
+            "１．定款第８条を次のように改める。",
+            f"　　８　当会社の代表社員は、社員 {self.c.new_rep_name} が各自代表する。",
+            "",
+            "以上のとおり全社員の一致を得たので、この決定書を作成し、",
+            "各社員が記名押印する。",
+            "",
+            f"{self.c.change_date}",
+            f"{self.c.name}",
+            "",
+            f"業務執行社員　{self.c.old_rep_name}  (印)",  # 退社する人
+            f"加入社員　　　{self.c.new_rep_name}  (印)",  # 残る人
+        ]
+
+        # 描画ループ (行間調整等は適宜)
+        y = 210 * mm
+        for line in text_lines:
+            c.drawString(25 * mm, y, line)
+            y -= 7 * mm  # 行間を少し詰める
+
+        self._save_pdf(c, filename)
 
     # --- 書類1: 登記申請書 ---
     def generate_application(self) -> None:
@@ -104,19 +163,46 @@ class RegistryGenerator:
         y = 240 * mm
         line_height = 10 * mm
 
+        if self.c.mode == "change_rep":
+            reason = "代表社員の変更"
+            attachments = [
+                "総社員の同意書　1通",
+                "代表社員の就任承諾書　1通",
+                "辞任届　1通",
+                "印鑑証明書　1通",
+            ]
+            cause_text = "辞任"
+        elif self.c.mode == "withdrawal":
+            reason = "社員の変更"  # または「業務執行社員の変更」等
+            attachments = [
+                "総社員の同意書　1通",
+                "代表社員の就任承諾書　1通",
+                "印鑑証明書　1通",
+            ]
+            cause_text = "退社"
+        else:
+            # Default fallthrough
+            reason = "変更登記"
+            attachments = []
+            cause_text = "変更"
+
         # 記載事項
         items = [
             ("1. 商号", self.c.name),
             ("1. 本店", self.c.address),
-            ("1. 登記の事由", "代表社員の変更"),
+            ("1. 登記の事由", reason),
             ("1. 登記すべき事項", "別紙のとおり"),
             ("1. 課税標準金額", "金10,000円"),
             ("1. 登録免許税", "金10,000円"),
-            ("1. 添付書類", "総社員の同意書　1通"),
-            ("", "代表社員の就任承諾書　1通"),
-            ("", "辞任届　1通"),
-            ("", "印鑑証明書　1通"),  # 新代表の分
+            ("1. 添付書類", attachments[0]),
         ]
+
+        # 残りの添付書類を追加
+        for att in attachments[1:]:
+            items.append(("", att))
+
+        # 新代表の印鑑証明
+        # items.append(("", "印鑑証明書　1通")) # attachmentsに含めたので不要
 
         for label, content in items:
             c.drawString(25 * mm, y, label)
@@ -154,7 +240,7 @@ class RegistryGenerator:
         y -= 8 * mm
         c.drawString(25 * mm, y, "「資格」代表社員")
         c.drawString(80 * mm, y, "「氏名」" + self.c.old_rep_name)
-        c.drawString(140 * mm, y, "「原因年月日」" + self.c.change_date + "辞任")
+        c.drawString(140 * mm, y, f"「原因年月日」{self.c.change_date}{cause_text}")
 
         y -= 8 * mm
         c.drawString(25 * mm, y, "「資格」代表社員")
@@ -166,8 +252,8 @@ class RegistryGenerator:
 
         self._save_pdf(c, filename)
 
-    # --- 書類2: 総社員の同意書 ---
-    def generate_consent(self) -> None:
+    # --- 書類2: 総社員の同意書 (代表交代版) ---
+    def generate_consent_change(self) -> None:
         filename = "2_総社員の同意書.pdf"
         c = self._create_canvas(filename)
 
