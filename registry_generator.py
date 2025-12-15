@@ -15,6 +15,7 @@ from reportlab.pdfgen import canvas
 @dataclass
 class CompanyConfig:
     mode: str = "change_rep"  # "change_rep" (交代) or "withdrawal" (退社・持分譲渡)
+    corporate_number: str = "1234-56-789012"  # 会社法人等番号
     name: str = "合同会社サンプル"  # 会社名
     address: str = "京都市北区..."  # 本店所在地
     capital: str = "1,000,000"  # 資本金（円）
@@ -126,7 +127,8 @@ class RegistryGenerator:
             "",
             "１．定款第５条中、有限責任社員竹中由美子の項を削除し",
             "　　次の一号を加えること。",
-            f"　　５　（新住所） 有限責任社員 {self.c.new_rep_name} 金１万円",
+            f"　　５　{self.c.new_rep_address} 有限責任社員 {self.c.new_rep_name} "
+            "金１万円",
             "",
             "１．定款第７条を次のように改める。",
             f"　　７　当会社の業務は、社員 {self.c.new_rep_name} が執行する。",
@@ -188,11 +190,11 @@ class RegistryGenerator:
 
         # 記載事項
         items = [
+            ("1. 会社法人等番号", self.c.corporate_number),
             ("1. 商号", self.c.name),
             ("1. 本店", self.c.address),
             ("1. 登記の事由", reason),
             ("1. 登記すべき事項", "別紙のとおり"),
-            ("1. 課税標準金額", "金10,000円"),
             ("1. 登録免許税", "金10,000円"),
             ("1. 添付書類", attachments[0]),
         ]
@@ -239,16 +241,23 @@ class RegistryGenerator:
         c.drawString(25 * mm, y, "「役員に関する事項」")
         y -= 8 * mm
         c.drawString(25 * mm, y, "「資格」代表社員")
-        c.drawString(80 * mm, y, "「氏名」" + self.c.old_rep_name)
-        c.drawString(140 * mm, y, f"「原因年月日」{self.c.change_date}{cause_text}")
+        c.drawString(75 * mm, y, "「氏名」" + self.c.old_rep_name)
+        c.drawString(125 * mm, y, f"「原因年月日」{self.c.change_date}{cause_text}")
 
         y -= 8 * mm
         c.drawString(25 * mm, y, "「資格」代表社員")
-        c.drawString(80 * mm, y, "「氏名」" + self.c.new_rep_name)
-        c.drawString(140 * mm, y, "「原因年月日」" + self.c.change_date + "就任")
+        c.drawString(75 * mm, y, "「氏名」" + self.c.new_rep_name)
+        c.drawString(125 * mm, y, "「原因年月日」" + self.c.change_date + "就任")
 
         y -= 8 * mm
-        c.drawString(25 * mm, y, "「住所」" + self.c.new_rep_address)
+        # 住所が長い場合は改行する
+        # 住所が長い場合は改行する
+        if len(self.c.new_rep_address) > 18:
+            c.drawString(25 * mm, y, "「住所」" + self.c.new_rep_address[:18])
+            y -= 6 * mm
+            c.drawString(42 * mm, y, self.c.new_rep_address[18:])
+        else:
+            c.drawString(25 * mm, y, "「住所」" + self.c.new_rep_address)
 
         self._save_pdf(c, filename)
 
